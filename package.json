@@ -1,0 +1,26 @@
+{
+  "name": "campus-attendance-pwa",
+  "version": "1.3.1",
+  "description": "Code-verified campus attendance PWA on Supabase",
+  "private": true,
+  "scripts": {
+    "start": "npx serve .",
+    "test:ui": "node tests/ui/tests.js"
+  },
+  "runtimeDependencies": {
+    "@supabase/supabase-js": "2.45.4 (loaded from cdn.jsdelivr.net in index.html, no install needed)"
+  },
+  "backend": {
+    "platform": "Supabase",
+    "project_ref": "ovdprijwhvmkiahxjqrx",
+    "postgres": "17",
+    "auth_provider": "Google",
+    "edge_functions": [
+      "export-to-sheets (Deno, deployed to the project)"
+    ],
+    "required_secrets": [
+      "GOOGLE_SERVICE_ACCOUNT_JSON",
+      "GOOGLE_SHEET_ID (optional default)"
+    ]
+  }
+}

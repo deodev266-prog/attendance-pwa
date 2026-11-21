@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Campus Attendance</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#4f8fdc">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap");
+:root{--bg:#eef3fc;--card:#f5f8ff;--text:#111;--muted:#5f6b7d;--accent:#0f44b8;--line:#d5dff0;--ok:#13804a;--bad:#c4161c}
+*{box-sizing:border-box;-webkit-touch-callout:none}
+body{margin:0;min-height:100vh;color:var(--text);font:16px/1.45 Poppins,system-ui,sans-serif;background:linear-gradient(135deg,#6db8da 0%,#4f8fdc 50%,#3b6fdb 100%) fixed;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom);user-select:none;-webkit-user-select:none}
+input{user-select:text;-webkit-user-select:text}
+main{max-width:440px;margin:18px auto;background:#fff;border-radius:34px;padding:22px 18px 18px;box-shadow:0 18px 50px rgba(15,50,130,.28)}
+.shield main{visibility:hidden}
+h1{font-size:1.45rem;font-weight:600;margin:8px 0 14px;text-align:center}h2{font-size:1.05rem;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
+input,select,button{font:inherit;width:100%;padding:11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+button{background:var(--accent);color:#fff;border:0;border-radius:99px;font-weight:600;margin-top:14px;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+button:disabled{opacity:.6}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.muted{color:var(--muted);font-size:.9rem}.msg{margin-top:10px;font-size:.9rem}.err{color:var(--bad)}.ok{color:var(--ok)}
+.chk{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.chk input{width:auto}.pct{font-size:1.5rem;font-weight:700}
+.bar{height:8px;background:var(--line);border-radius:4px;margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
+.tabs{display:flex;gap:6px;margin-bottom:14px}.tabs button{margin:0;background:var(--card);color:var(--text);border:1px solid var(--line);padding:9px 4px;font-size:.9rem}
+.tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.sm{width:auto;padding:7px 12px;margin:0;font-size:.85rem}button.bad{background:var(--bad)}
+.code{font:700 2.2rem ui-monospace,monospace;letter-spacing:.35em;text-align:center;padding:12px 0 12px .35em;border:2px dashed var(--line);border-radius:10px;margin:10px 0}
+.pill{display:inline-block;font-size:.75rem;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.open{color:var(--ok);border-color:var(--ok)}.pill.expired{color:var(--bad);border-color:var(--bad)}
+.item{padding:10px 0;border-bottom:1px solid var(--line)}.item:last-child{border:0}.click{cursor:pointer}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.85rem}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+input.pin{font:700 1.6rem ui-monospace,monospace;letter-spacing:.4em;text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+a{color:var(--accent)}.foot{text-align:center;font-size:.8rem;color:var(--muted);margin:14px 0 0}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:600;color:var(--accent);flex:none}
+.av.lg{width:104px;height:104px;font-size:2rem}.who{text-align:center}.who strong{display:block;font-size:1.1rem}
+.boxes{display:flex;justify-content:center;gap:12px;margin:14px 0 8px}
+.box{width:30px;height:46px;background:#c9d6f3;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.box.on{background:var(--accent)}.box.on::after{content:"";width:9px;height:9px;border-radius:50%;background:#fff}
+.errline{color:var(--bad);text-align:center;min-height:1.4em;margin:4px 0;font-size:.92rem}.okline{color:var(--ok);text-align:center;font-weight:600}
+button.pill{display:block;width:62%;margin:10px auto;background:#d9d9d9;color:#000}button.pill.go{background:var(--accent);color:#fff}
+button.link{background:none;color:#000;text-decoration:underline;width:auto;margin:4px auto;display:block;padding:4px;font-size:.95rem}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);background:#e3eefd;border-radius:12px;padding:6px 8px;margin-top:10px}
+.pad button{background:transparent;color:#000;margin:0;border-radius:0;font-size:1.45rem;font-weight:600;padding:13px 0}
+.pad button:not(:nth-child(3n)){border-right:1px solid #d2dcec}.pad button:nth-child(-n+9){border-bottom:1px solid #d2dcec}
+.pad button:active{background:#cfe0fb}.pad .sym{font-size:1rem;font-weight:500}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:12px;font-size:.85rem}details summary{cursor:pointer;color:var(--accent);font-weight:500}
+.terms{max-height:220px;overflow:auto;user-select:text;-webkit-user-select:text}.terms p{margin:.5em 0}
+.who2{display:flex;gap:12px;align-items:center}.who2 .grow{flex:1;min-width:0}
+.school{color:#0a7d2c;font-weight:800;font-size:.98rem;letter-spacing:.02em;text-align:center;line-height:1.3;margin:0 0 14px;padding-bottom:10px;border-bottom:4px solid #0a7d2c;text-transform:uppercase}
+.badge{font-size:.7rem;padding:1px 8px;border-radius:99px;background:#0a7d2c;color:#fff;margin-left:6px}.badge.off{background:var(--bad)}
+button.pill{padding:13px 0;font-size:1rem}input.pin::placeholder{letter-spacing:0;font-size:.85rem;font-weight:400}
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Loading…</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL = "https://ovdprijwhvmkiahxjqrx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ypQd02AH6yzD5TaxNYOE8g_kNaDr7a4";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const app = document.getElementById("app");
+let user = null, student = null, profileDraft = null;
+
+// tiny DOM helper (text is always set as text, never HTML)
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "on") for (const [e, f] of Object.entries(v)) el.addEventListener(e, f);
+    else if (k === "class") el.className = v;
+    else el[k] = v;
+  }
+  kids.flat().forEach(c => el.append(c instanceof Node ? c : document.createTextNode(c ?? "")));
+  return el;
+}
+let secure = false;
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("shield", secure && document.hidden));
+window.addEventListener("blur", () => { if (secure) document.body.classList.add("shield"); });
+window.addEventListener("focus", () => document.body.classList.remove("shield"));
+const CONTACT_MAIL = "deodev266@gmail.com", CONTACT_WA = "2349152649961";
+const footer = () => h("p", { class: "foot" }, "Need help? ", h("a", { href: "mailto:" + CONTACT_MAIL }, "Email"), " · ", h("a", { href: "https://wa.me/" + CONTACT_WA, target: "_blank", rel: "noopener" }, "WhatsApp 09152649961"));
+const show = (...nodes) => { secure = false; document.body.classList.remove("shield"); app.replaceChildren(h("div", { class: "school" }, "FEDERAL UNIVERSITY OF DEVELOPMENT AND AGRICULTURE STUDIES IRABIGI"), ...nodes, footer()); };
+function avatar(url, name, cls) { return url ? h("img", { class: "av " + (cls || ""), src: url, alt: name || "" }) : h("div", { class: "av " + (cls || "") }, (name || "?").trim().charAt(0).toUpperCase()); }
+async function fetchAll(build, page = 1000) { // Supabase returns max 1000 rows/request: page through
+  let out = [];
+  for (let from = 0; ; from += page) {
+    const { data, error } = await build().range(from, from + page - 1);
+    if (error) throw error;
+    out = out.concat(data || []);
+    if (!data || data.length < page) return out;
+  }
+}
+async function fetchSummary(f, courses, onProgress) { // one course at a time keeps each report query small
+  const ids = f.p_course_id ? [f.p_course_id] : courses.filter(c => !f.p_department_id || c.department_id === f.p_department_id).map(c => c.id);
+  let all = [], i = 0;
+  for (const cid of ids) { onProgress && onProgress(++i, ids.length); all = all.concat(await fetchAll(() => db.rpc("admin_attendance_summary", { ...f, p_course_id: cid }))); }
+  return all;
+}
+async function photoUrls(paths) {
+  const p = [...new Set((paths || []).filter(Boolean))]; if (!p.length) return {};
+  const m = {}, parts = [];
+  for (let i = 0; i < p.length; i += 100) parts.push(p.slice(i, i + 100));
+  const res = await Promise.all(parts.map(c => db.storage.from("student-photos").createSignedUrls(c, 3600)));
+  res.forEach(r => (r.data || []).forEach(x => { if (x.signedUrl) m[x.path] = x.signedUrl; })); return m;
+}
+async function myPhoto() { if (!student?.photo_path) return null; const m = await photoUrls([student.photo_path]); return m[student.photo_path] || null; }
+function toJpeg(file, max = 360) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); c.toBlob(b => b ? res(b) : rej(new Error("Image error")), "image/jpeg", .75); };
+    img.onerror = () => rej(new Error("Could not read that image")); img.src = URL.createObjectURL(file);
+  });
+}
+const msg = (el, text, ok) => { el.textContent = text; el.className = "msg " + (ok ? "ok" : "err"); };
+const signOutBtn = () => h("button", { class: "ghost", on: { click: async () => { await db.auth.signOut(); location.reload(); } } }, "Sign out");
+
+async function route() {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return viewSignIn();
+  user = session.user;
+  const { data: adm } = await db.from("administrators").select("id").eq("id", user.id).maybeSingle();
+  if (adm) return viewSessions();
+  const { data: st } = await db.from("students").select("*").eq("auth_user_id", user.id).maybeSingle();
+  student = st;
+  if (!st) return viewProfile();
+  if (!st.registration_completed) return viewCourses();
+  return viewDashboard();
+}
+
+function viewSignIn() {
+  const note = h("p", { class: "msg" });
+  show(h("h1", {}, "Campus Attendance"),
+    h("div", { class: "card" },
+      h("h2", {}, "Welcome"),
+      h("p", { class: "muted" }, "Sign in with Google. Students register once; administrators are approved separately."),
+      h("button", { on: { click: async () => {
+        const { error } = await db.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+        if (error) msg(note, error.message);
+      } } }, "Sign in with Google"), note));
+}
+
+const TERMS_VERSION = "1.0";
+const TERMS = [
+  "1. Purpose. This app records your attendance at classes. Attendance is only recorded when an authorised administrator enters the session code on your device.",
+  "2. Your information. We store your name, matric number, department, level, registered courses, profile photo and attendance records. The photo is used so the administrator can confirm who is present. Only you and administrators can see it.",
+  "3. Codes. Attendance codes are secret and belong to the administrator. You must not ask for, guess, share or try to obtain a code. Repeated wrong codes lock your attempt for that session.",
+  "4. Honest use. You must register only as yourself, use your own photo, and never mark or help mark attendance for another person. Fraud may be reported to your institution and can lead to disciplinary action.",
+  "5. Courses. You choose your courses once during registration. Changes can only be made by an administrator.",
+  "6. Recording. Do not screen-record or photograph attendance codes or other students' details.",
+  "7. Data use and retention. Your records are used for attendance reports and may be exported to your institution's spreadsheets. They are kept for as long as your institution requires.",
+  "8. Contact. Questions or corrections: deodev266@gmail.com or WhatsApp 09152649961."
+];
+async function viewProfile() {
+  const { data: depts } = await db.from("departments").select("id,name").order("name");
+  const note = h("p", { class: "msg" });
+  const matric = h("input", { placeholder: "e.g. U2024/5555266" });
+  const name = h("input", { value: user.user_metadata?.full_name || "" });
+  const level = h("input", { placeholder: "e.g. 200" });
+  const dept = h("select", {}, h("option", { value: "" }, "Select department"), (depts || []).map(d => h("option", { value: d.id }, d.name)));
+  let blob = null;
+  const prev = h("div", { style: "display:flex;justify-content:center" }, h("div", { class: "av lg" }, "📷"));
+  const file = h("input", { type: "file", accept: "image/*", capture: "user", style: "display:none" });
+  file.addEventListener("change", async () => {
+    if (!file.files[0]) return;
+    try { blob = await toJpeg(file.files[0]); prev.replaceChildren(avatar(URL.createObjectURL(blob), "me", "lg")); msg(note, "", true); }
+    catch (e) { blob = null; msg(note, e.message); }
+  });
+  const agree = h("input", { type: "checkbox" });
+  const btn = h("button", { on: { click: async () => {
+    if (!blob) return msg(note, "Take or choose a clear photo of your face.");
+    if (!matric.value.trim() || !name.value.trim() || !dept.value) return msg(note, "Fill in all required fields.");
+    if (!agree.checked) return msg(note, "You must accept the Terms and Conditions.");
+    btn.disabled = true; btn.textContent = "Saving…";
+    const path = user.id + "/avatar.jpg";
+    const up = await db.storage.from("student-photos").upload(path, blob, { contentType: "image/jpeg", upsert: true });
+    if (up.error) { btn.disabled = false; btn.textContent = "Continue"; return msg(note, "Photo upload failed: " + up.error.message); }
+    const { data, error } = await db.from("students").insert({
+      auth_user_id: user.id, matric_no: matric.value.trim(), full_name: name.value.trim(), email: user.email,
+      department_id: dept.value, level: level.value.trim() || null, photo_path: path,
+      terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION
+    }).select().single();
+    if (error) { btn.disabled = false; btn.textContent = "Continue"; return msg(note, error.message.includes("duplicate") ? "That matric number is already registered." : error.message); }
+    student = data; viewCourses();
+  } } }, "Continue");
+  show(h("h1", {}, "Student registration"),
+    h("div", { class: "card" },
+      h("p", { class: "muted" }, "Step 1 of 2 · Your details"),
+      !depts?.length ? h("p", { class: "err" }, "No departments yet. Ask the administrator to add them.") : "",
+      h("div", { style: "text-align:center" }, prev, file, h("button", { class: "ghost sm", style: "margin-top:8px", on: { click: () => file.click() } }, "Take / choose photo *")),
+      h("label", {}, "Matric number *"), matric, h("label", {}, "Full name *"), name,
+      h("label", {}, "Department *"), dept, h("label", {}, "Level"), level,
+      h("details", {}, h("summary", {}, "Read the Terms and Conditions"), h("div", { class: "terms" }, TERMS.map(t => h("p", {}, t)))),
+      h("label", { class: "chk", style: "color:var(--text)" }, agree, h("span", {}, "I have read and accept the Terms and Conditions *")),
+      btn, note),
+    signOutBtn());
+}
+
+async function viewCourses() {
+  const { data: courses } = await db.from("courses").select("id,code,title").eq("department_id", student.department_id).order("code");
+  const note = h("p", { class: "msg" });
+  const boxes = (courses || []).map(c => ({ c, box: h("input", { type: "checkbox", value: c.id }) }));
+  const btn = h("button", { on: { click: async () => {
+    const ids = boxes.filter(b => b.box.checked).map(b => b.c.id);
+    if (!ids.length) return msg(note, "Select at least one course.");
+    if (!confirm("Your courses cannot be changed after this. Submit?")) return;
+    btn.disabled = true;
+    const { error } = await db.rpc("register_courses", { p_course_ids: ids });
+    if (error) { btn.disabled = false; return msg(note, error.message); }
+    route();
+  } } }, "Submit courses (final)");
+  show(h("h1", {}, "Select your courses"),
+    h("div", { class: "card" },
+      h("p", { class: "muted" }, "Step 2 of 2 · You can only do this once."),
+      !boxes.length ? h("p", { class: "err" }, "No courses available for your department yet.") : "",
+      boxes.map(({ c, box }) => h("label", { class: "chk" }, box, h("span", {}, c.code + " — " + c.title))),
+      btn, note),
+    signOutBtn());
+}
+
+async function viewDashboard() {
+  const pUrl = await myPhoto();
+  const { data: rows } = await db.from("student_attendance_summary").select("*").order("course_code");
+  show(studentNav("dash"), h("h1", {}, "My dashboard"),
+    h("div", { class: "card who2" }, avatar(pUrl, student.full_name), h("div", { class: "grow" }, h("h2", { style: "margin:0" }, student.full_name),
+      h("div", { class: "muted" }, student.matric_no + (student.level ? " · Level " + student.level : "")))),
+    h("div", { class: "card" }, h("h2", {}, "Attendance by course"),
+      !rows?.length ? h("p", { class: "muted" }, "No registered courses.") : "",
+      (rows || []).map(r => h("div", { style: "margin:12px 0" },
+        h("div", { class: "row" }, h("strong", {}, r.course_code), h("span", { class: "pct" }, r.attendance_percentage + "%")),
+        h("div", { class: "muted" }, r.course_title + " · " + r.sessions_attended + " of " + r.sessions_held + " sessions"),
+        h("div", { class: "bar" }, h("i", { style: "width:" + Math.min(100, r.attendance_percentage) + "%" }))))),
+    signOutBtn());
+}
+
+async function viewAdmin() {
+  const [{ data: depts }, { data: courses }, { count }, { data: admins }] = await Promise.all([
+    db.from("departments").select("id,name").order("name"),
+    db.from("courses").select("id,code,title,department_id").order("code"),
+    db.from("students").select("id", { count: "exact", head: true }),
+    db.from("administrators").select("id,email,full_name,is_primary,is_active,created_at").order("created_at")]);
+  const dn = h("input", { placeholder: "Department name" }), dnote = h("p", { class: "msg" });
+  const cc = h("input", { placeholder: "Course code, e.g. NSC 201" }), ct = h("input", { placeholder: "Course title" });
+  const cd = h("select", {}, (depts || []).map(d => h("option", { value: d.id }, d.name)));
+  const cnote = h("p", { class: "msg" });
+  show(adminNav("setup"), h("h1", {}, "Setup"),
+    h("div", { class: "card" }, h("div", { class: "row" }, h("span", {}, "Registered students"), h("span", { class: "pct" }, count ?? 0))),
+    h("div", { class: "card" }, h("h2", {}, "Departments (" + (depts?.length || 0) + ")"),
+      (depts || []).map(d => h("div", { class: "muted" }, d.name)), dn,
+      h("button", { on: { click: async () => {
+        if (!dn.value.trim()) return;
+        const { error } = await db.from("departments").insert({ name: dn.value.trim() });
+        error ? msg(dnote, error.message) : viewAdmin();
+      } } }, "Add department"), dnote),
+    h("div", { class: "card" }, h("h2", {}, "Courses (" + (courses?.length || 0) + ")"),
+      (courses || []).map(c => h("div", { class: "muted" }, c.code + " — " + c.title)),
+      h("label", {}, "Department"), cd, h("label", {}, "Course"), cc, h("div", { style: "height:8px" }), ct,
+      h("button", { on: { click: async () => {
+        if (!cd.value || !cc.value.trim() || !ct.value.trim()) return msg(cnote, "Fill in all fields.");
+        const { error } = await db.from("courses").insert({ department_id: cd.value, code: cc.value.trim(), title: ct.value.trim() });
+        error ? msg(cnote, error.message) : viewAdmin();
+      } } }, "Add course"), cnote),
+    adminsCard(admins || []),
+    signOutBtn());
+}
+
+
+// ================= shared helpers =================
+const when = x => x ? new Date(x).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
+const tabs = (items, cur) => h("div", { class: "tabs" }, items.map(([k, l, f]) => h("button", { class: k === cur ? "on" : "", on: { click: f } }, l)));
+const adminNav = cur => tabs([["sessions", "Sessions", viewSessions], ["reports", "Reports", viewReports], ["students", "Students", viewStudents], ["setup", "Setup", viewAdmin]], cur);
+const studentNav = cur => tabs([["dash", "Dashboard", viewDashboard], ["mark", "Mark attendance", viewMark]], cur);
+const opts = (rows, label) => rows.map(r => h("option", { value: r.id }, label(r)));
+const loading = t => h("p", { class: "muted" }, t || "Loading…");
+const errBox = e => h("div", { class: "card" }, h("p", { class: "err" }, "Something went wrong: " + (e?.message || e)));
+const store = { get: k => { try { return sessionStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch {} } };
+
+// ================= ADMIN: sessions =================
+async function viewSessions() {
+  show(adminNav("sessions"), loading());
+  const [{ data: depts, error: e1 }, { data: courses, error: e2 }, { data: sess, error: e3 }] = await Promise.all([
+    db.from("departments").select("id,name").order("name"),
+    db.from("courses").select("id,code,title,department_id").order("code"),
+    db.from("admin_session_overview").select("*").order("created_at", { ascending: false }).limit(60)]);
+  if (e1 || e2 || e3) return show(adminNav("sessions"), errBox(e1 || e2 || e3));
+
+  const dept = h("select", {}, opts(depts, d => d.name)), course = h("select"), mins = h("select", {}, [15, 30, 60, 120].map(m => h("option", { value: m, selected: m === 30 }, m + " minutes")));
+  const roster = h("div"), note = h("p", { class: "msg" }), createBtn = h("button", {}, "Create session & generate code");
+  let picks = [];
+  const fillCourses = () => { course.replaceChildren(...opts(courses.filter(c => c.department_id === dept.value), c => c.code + " — " + c.title)); loadRoster(); };
+  async function loadRoster() {
+    picks = []; roster.replaceChildren(loading("Loading students…")); createBtn.disabled = true;
+    if (!course.value) return roster.replaceChildren(h("p", { class: "muted" }, "No courses in this department yet."));
+    let data, error; try { data = await fetchAll(() => db.from("registrations").select("student_id, students(id,full_name,matric_no,department_id,photo_path)").eq("course_id", course.value).order("student_id")); } catch (e) { error = e; }
+    if (error) return roster.replaceChildren(h("p", { class: "err" }, error.message));
+    const list = (data || []).map(r => r.students).filter(s => s && s.department_id === dept.value).sort((a, b) => a.full_name.localeCompare(b.full_name));
+    if (!list.length) return roster.replaceChildren(h("p", { class: "muted" }, "No students are registered for this course."));
+    const pm = list.length <= 200 ? await photoUrls(list.map(s => s.photo_path)) : {}; // big classes: initials only, photos show on the code screen
+    const boxes = list.map(s => ({ s, box: h("input", { type: "checkbox", checked: true }) }));
+    const sync = () => { picks = boxes.filter(b => b.box.checked).map(b => b.s.id); createBtn.disabled = !picks.length; all.textContent = picks.length === boxes.length ? "Clear all" : "Select all"; };
+    const all = h("button", { class: "ghost sm", on: { click: () => { const on = picks.length !== boxes.length; boxes.forEach(b => b.box.checked = on); sync(); } } }, "Clear all");
+    boxes.forEach(b => b.box.addEventListener("change", sync));
+    roster.replaceChildren(h("div", { class: "row" }, h("span", { class: "muted" }, list.length + " registered students"), all),
+      ...boxes.map(({ s, box }) => h("label", { class: "chk" }, box, avatar(pm[s.photo_path], s.full_name), h("span", {}, s.full_name + " · " + s.matric_no))));
+    sync();
+  }
+  dept.addEventListener("change", fillCourses); course.addEventListener("change", loadRoster);
+  createBtn.addEventListener("click", async () => {
+    createBtn.disabled = true; msg(note, "Creating…", true);
+    const { data, error } = await db.rpc("create_attendance_session", { p_course_id: course.value, p_department_id: dept.value, p_student_ids: picks, p_duration_minutes: +mins.value });
+    if (error || !data?.length) { createBtn.disabled = false; return msg(note, error?.message || "No session returned"); }
+    store.set("code:" + data[0].session_id, data[0].code); viewSession(data[0].session_id);
+  });
+
+  const row = s => h("div", { class: "item click", on: { click: () => viewSession(s.id) } },
+    h("div", { class: "row" }, h("strong", {}, s.course_code), h("span", { class: "pill " + s.effective_status }, s.effective_status)),
+    h("div", { class: "muted" }, s.department + " · " + s.present_count + "/" + s.total_students + " present · " + when(s.created_at)));
+  const active = sess.filter(s => s.effective_status === "open"), done = sess.filter(s => s.effective_status !== "open");
+  show(adminNav("sessions"), h("h1", {}, "Attendance sessions"),
+    h("div", { class: "card" }, h("h2", {}, "New session"),
+      !depts.length ? h("p", { class: "err" }, "Add a department and courses in Setup first.") : "",
+      h("label", {}, "Department"), dept, h("label", {}, "Course"), course, h("label", {}, "Session length"), mins,
+      h("label", {}, "Students"), roster, createBtn, note),
+    h("div", { class: "card" }, h("h2", {}, "Active (" + active.length + ")"), active.length ? active.map(row) : h("p", { class: "muted" }, "No active sessions.")),
+    h("div", { class: "card" }, h("h2", {}, "Completed"), done.length ? done.map(row) : h("p", { class: "muted" }, "Nothing yet.")),
+    signOutBtn());
+  if (depts.length) fillCourses();
+}
+
+async function viewSession(id) {
+  show(adminNav("sessions"), loading());
+  const [{ data: s, error: e1 }, { data: recs, error: e2 }] = await Promise.all([
+    db.from("admin_session_overview").select("*").eq("id", id).single(),
+    fetchAll(() => db.from("attendance_records").select("id,student_id,status,marked_at,failed_attempts,students(full_name,matric_no,photo_path)").eq("session_id", id).order("id")).then(data => ({ data, error: null }), error => ({ data: null, error }))]);
+  if (e1 || e2) return show(adminNav("sessions"), errBox(e1 || e2));
+  recs.sort((a, b) => a.students.full_name.localeCompare(b.students.full_name));
+  const open = s.effective_status === "open";
+  const [pm, codeRes] = await Promise.all([recs.length <= 200 ? photoUrls(recs.map(r => r.students.photo_path)) : Promise.resolve({}), open ? db.rpc("reveal_session_code", { p_session_id: id }) : Promise.resolve({ data: null })]);
+  let code = codeRes.data || null;
+  const note = h("p", { class: "msg" });
+  const act = async (label, fn) => { msg(note, label + "…", true); const { error } = await fn(); error ? msg(note, error.message) : viewSession(id); };
+
+  // Code: hidden by default, shown only while held; encrypted at rest, decrypted by the server for admins only
+  const codeEl = h("div", { class: "code" }, "••••••");
+  const hide = () => { codeEl.textContent = "••••••"; }, reveal = () => { if (code) codeEl.textContent = code; };
+  const hold = h("button", { class: "ghost sm", style: "display:block;margin:0 auto" }, "Hold to show code");
+  ["pointerdown"].forEach(e => hold.addEventListener(e, reveal)); ["pointerup", "pointerleave", "pointercancel"].forEach(e => hold.addEventListener(e, hide));
+  hold.addEventListener("contextmenu", ev => ev.preventDefault());
+  const custom = h("input", { class: "pin", type: "password", inputMode: "numeric", maxLength: 6, placeholder: "6 digits" });
+  const mins = h("input", { type: "number", min: 1, max: 720, value: 30 });
+
+  const codeCard = !open ? "" : h("div", { class: "card" }, h("h2", {}, "Attendance code"),
+    h("p", { class: "muted" }, "Only administrators can see this. Never show it to students."), codeEl, hold,
+    h("div", { class: "two", style: "margin-top:12px" },
+      h("button", { class: "ghost sm", style: "width:100%", on: { click: () => confirm("Replace the code with a new random one?") && act("Generating", () => db.rpc("rotate_session_code", { p_session_id: id })) } }, "New random code"),
+      h("button", { class: "sm", style: "width:100%", on: { click: () => { if (!/^\d{6}$/.test(custom.value)) return msg(note, "Enter exactly 6 digits."); act("Saving code", () => db.rpc("set_session_code", { p_session_id: id, p_code: custom.value })); } } }, "Set my own code")),
+    h("label", {}, "Custom code (masked)"), custom);
+  secure = open;
+
+  show(adminNav("sessions"),
+    h("button", { class: "ghost sm", on: { click: viewSessions } }, "← All sessions"),
+    h("h1", {}, s.course_code + " — " + s.course_title),
+    h("div", { class: "card" },
+      h("div", { class: "row" }, h("span", { class: "muted" }, s.department), h("span", { class: "pill " + s.effective_status }, s.effective_status)),
+      h("p", { class: "muted" }, "Started " + when(s.created_at) + (s.expires_at ? " · " + (open ? "expires " : "expired ") + when(s.expires_at) : "") + (s.closed_at ? " · closed " + when(s.closed_at) : ""))),
+    codeCard,
+    h("div", { class: "card" }, h("h2", {}, "Session time"),
+      h("label", {}, open ? "Minutes left from now" : "Reopen for (minutes)"), mins,
+      h("button", { on: { click: () => +mins.value >= 1 && +mins.value <= 720 ? act("Updating time", () => db.rpc("set_session_expiry", { p_session_id: id, p_minutes: +mins.value })) : msg(note, "Enter 1 to 720 minutes.") } }, open ? "Update time" : "Reopen session"),
+      open ? h("button", { class: "bad", on: { click: () => confirm("Close this session now?") && act("Closing", () => db.rpc("close_attendance_session", { p_session_id: id })) } }, "Close session now") : "", note),
+    h("div", { class: "card" }, h("div", { class: "row" }, h("h2", {}, "Records · " + s.present_count + "/" + s.total_students + " present"), h("button", { class: "ghost sm", on: { click: () => viewSession(id) } }, "Refresh")),
+      recs.length ? recs.map(r => h("div", { class: "item who2" }, avatar(pm[r.students.photo_path], r.students.full_name),
+        h("div", { class: "grow" },
+          h("div", { class: "row" }, h("strong", {}, r.students.full_name), h("span", { class: r.status === "present" ? "ok" : "muted" }, r.status === "present" ? "Present" : "Absent")),
+          h("div", { class: "muted" }, r.students.matric_no + (r.marked_at ? " · " + when(r.marked_at) : "")),
+          r.failed_attempts >= 5 && r.status === "absent" ? h("button", { class: "sm", on: { click: () => act("Unlocking", () => db.rpc("reset_failed_attempts", { p_session_id: id, p_student_id: r.student_id })) } }, "Locked · Unlock")
+          : r.failed_attempts ? h("span", { class: "muted" }, r.failed_attempts + " wrong attempt(s)") : ""))) : h("p", { class: "muted" }, "No students in this session.")));
+  secure = open;
+}
+
+// ================= STUDENT: mark attendance (admin types the code on the student's device) =================
+const MARK_MSG = {
+  already_marked: "Your attendance is already recorded.", expired: "This session has expired. Ask the administrator to extend it.",
+  session_closed: "This session is closed.", not_on_roster: "You are not listed for this session.",
+  locked: "Too many wrong attempts. Ask the administrator to unlock you.", invalid_format: "Enter exactly 6 digits.",
+  not_a_student: "No student profile found for this account."
+};
+async function viewMark() {
+  show(studentNav("mark"), loading());
+  const [{ data, error }, url] = await Promise.all([db.rpc("my_open_sessions"), myPhoto()]);
+  if (error) return show(studentNav("mark"), errBox(error));
+  if (data?.length === 1) return viewCode(data[0], url);
+  show(studentNav("mark"), h("h1", {}, "Mark attendance"),
+    data?.length ? h("div", { class: "card" }, h("p", { class: "muted" }, "Choose the class:"), data.map(s => h("button", { on: { click: () => viewCode(s, url) } }, s.course_code + " — " + s.course_title)))
+    : h("div", { class: "card" }, h("p", { class: "muted" }, "No open attendance session for you right now."), h("button", { class: "ghost", on: { click: viewMark } }, "Refresh")),
+    signOutBtn());
+}
+function viewCode(s, url) {
+  let digits = "", busy = false;
+  const boxes = [...Array(6)].map(() => h("div", { class: "box" }));
+  const err = h("p", { class: "errline" }), verify = h("button", { class: "pill" }, "Verify");
+  const render = () => { boxes.forEach((b, i) => b.className = "box" + (i < digits.length ? " on" : "")); verify.disabled = busy || digits.length !== 6; verify.className = "pill" + (verify.disabled ? "" : " go"); };
+  const press = d => { if (busy || digits.length >= 6) return; digits += d; err.textContent = ""; render(); };
+  const back = () => { if (!busy) { digits = digits.slice(0, -1); render(); } };
+  const keys = [..."123456789"].map(d => h("button", { on: { click: () => press(d) } }, d));
+  keys.push(h("button", { class: "sym", on: { click: () => { if (!busy) { digits = ""; render(); } } } }, "Clear"), h("button", { on: { click: () => press("0") } }, "0"), h("button", { class: "sym", on: { click: back } }, "⌫"));
+  verify.addEventListener("click", async () => {
+    busy = true; verify.textContent = "Verifying…"; render(); err.textContent = "";
+    const { data: res, error } = await db.rpc("mark_attendance", { p_session_id: s.session_id, p_code: digits });
+    busy = false; digits = ""; verify.textContent = "Verify";
+    if (error) { err.textContent = error.message; return render(); }
+    const [k, left] = String(res).split(":");
+    if (k === "ok" || k === "already_marked") {
+      secure = false;
+      return show(studentNav("mark"), h("div", { class: "who" }, avatar(url, student.full_name, "lg"), h("strong", {}, student.full_name)),
+        h("p", { class: "okline", style: "margin-top:16px" }, k === "ok" ? "✓ Attendance recorded" : "✓ " + MARK_MSG.already_marked), h("p", { class: "muted", style: "text-align:center" }, s.course_code + " — " + s.course_title),
+        h("button", { class: "pill go", on: { click: viewDashboard } }, "View my dashboard"));
+    }
+    err.textContent = k === "invalid_code" ? "Please enter the valid code. " + (+left > 0 ? left + " attempt(s) left." : "No attempts left.") : (MARK_MSG[k] || "Could not verify: " + res);
+    render();
+  });
+  show(studentNav("mark"), h("h1", {}, "Attendance Verification"),
+    h("div", { class: "who" }, avatar(url, student.full_name, "lg"), h("strong", { style: "margin-top:8px" }, student.full_name), h("span", { class: "muted" }, student.matric_no + " · " + s.course_code)),
+    h("p", { class: "muted", style: "text-align:center;margin:12px 6px 0" }, "Administrator: confirm this is the right student, then enter the 6-digit attendance code."),
+    h("div", { class: "boxes" }, boxes), err, verify,
+    h("button", { class: "link", on: { click: () => { digits = ""; render(); } } }, "Clear code"), h("div", { class: "pad" }, keys));
+  secure = true; render();
+}
+
+// ================= ADMIN: administrators (primary admin is permanent; only the primary manages others) =================
+function adminsCard(admins) {
+  const me = admins.find(a => a.id === user.id), isPrimary = !!me?.is_primary;
+  const email = h("input", { type: "email", placeholder: "Email of a person who has signed in once" }), nm = h("input", { placeholder: "Name (optional)" }), note = h("p", { class: "msg" });
+  const run = async (label, fn) => { msg(note, label + "…", true); const { error } = await fn(); error ? msg(note, error.message) : viewAdmin(); };
+  return h("div", { class: "card" }, h("h2", {}, "Administrators (" + admins.length + ")"),
+    admins.map(a => h("div", { class: "item" }, h("div", { class: "row" },
+      h("div", {}, h("strong", {}, a.full_name || a.email), a.is_primary ? h("span", { class: "badge" }, "PRIMARY") : "", !a.is_active ? h("span", { class: "badge off" }, "INACTIVE") : "", h("div", { class: "muted" }, a.email)),
+      isPrimary && !a.is_primary ? h("button", { class: "sm " + (a.is_active ? "bad" : ""), on: { click: () => (!a.is_active || confirm("Remove admin access for " + a.email + "?")) && run("Saving", () => db.rpc("set_administrator_active", { p_admin_id: a.id, p_active: !a.is_active })) } }, a.is_active ? "Deactivate" : "Reactivate") : ""))),
+    isPrimary ? h("div", {}, h("label", {}, "Add administrator"), email, h("div", { style: "height:8px" }), nm,
+      h("button", { on: { click: () => email.value.trim() ? run("Adding", () => db.rpc("add_administrator", { p_email: email.value.trim(), p_full_name: nm.value.trim() || null })) : msg(note, "Enter an email.") } }, "Add administrator"))
+    : h("p", { class: "muted" }, "Only the primary administrator can add or remove administrators. The primary administrator can never be changed."), note);
+}
+
+// ================= ADMIN: students =================
+async function viewStudents() {
+  show(adminNav("students"), loading());
+  const { data: depts } = await db.from("departments").select("id,name").order("name");
+  const dn = Object.fromEntries((depts || []).map(d => [d.id, d.name]));
+  const PAGE = 25; let page = 0, timer = 0, total = 0;
+  const title = h("h1", {}, "Students"), q = h("input", { placeholder: "Search name or matric number" }), list = h("div"), pager = h("div", { class: "row" });
+  async function load() {
+    list.replaceChildren(loading());
+    const t = q.value.trim().replace(/[%,()*\\]/g, "");
+    let qb = db.from("students").select("*", { count: "exact" }).order("full_name").order("id").range(page * PAGE, page * PAGE + PAGE - 1);
+    if (t) qb = qb.or("full_name.ilike.%" + t + "%,matric_no.ilike.%" + t + "%");
+    const { data, count, error } = await qb;
+    if (error) return list.replaceChildren(h("p", { class: "err" }, error.message));
+    total = count || 0; title.textContent = "Students (" + total + ")";
+    const pm = await photoUrls((data || []).map(r => r.photo_path));
+    list.replaceChildren(...(data?.length ? data.map(r => h("div", { class: "item who2 click", on: { click: () => viewStudentEdit(r, pm[r.photo_path], depts) } }, avatar(pm[r.photo_path], r.full_name),
+      h("div", { class: "grow" }, h("strong", {}, r.full_name), h("div", { class: "muted" }, r.matric_no + " · " + (dn[r.department_id] || "—") + (r.level ? " · L" + r.level : ""))))) : [h("p", { class: "muted" }, "No students found.")]));
+    const pages = Math.max(1, Math.ceil(total / PAGE));
+    pager.replaceChildren(h("button", { class: "ghost sm", disabled: page === 0, on: { click: () => { page--; load(); } } }, "← Prev"), h("span", { class: "muted" }, "Page " + (page + 1) + " of " + pages),
+      h("button", { class: "ghost sm", disabled: page + 1 >= pages, on: { click: () => { page++; load(); } } }, "Next →"));
+  }
+  q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { page = 0; load(); }, 300); });
+  show(adminNav("students"), title, h("div", { class: "card" }, q, list, pager), signOutBtn());
+  load();
+}
+function viewStudentEdit(r, url, depts) {
+  const name = h("input", { value: r.full_name }), matric = h("input", { value: r.matric_no }), level = h("input", { value: r.level || "" });
+  const dept = h("select", {}, (depts || []).map(d => h("option", { value: d.id, selected: d.id === r.department_id }, d.name)));
+  const note = h("p", { class: "msg" });
+  show(adminNav("students"), h("button", { class: "ghost sm", on: { click: viewStudents } }, "← Students"),
+    h("div", { class: "who" }, avatar(url, r.full_name, "lg")),
+    h("div", { class: "card" }, h("label", {}, "Full name"), name, h("label", {}, "Matric number"), matric, h("label", {}, "Department"), dept, h("label", {}, "Level"), level,
+      h("p", { class: "muted", style: "margin-top:10px" }, "Terms accepted: " + when(r.terms_accepted_at) + (r.terms_version ? " (v" + r.terms_version + ")" : "") + ". Registered courses are locked and cannot be edited here."),
+      h("button", { on: { click: async () => {
+        if (!name.value.trim() || !matric.value.trim()) return msg(note, "Name and matric number are required.");
+        const { error } = await db.from("students").update({ full_name: name.value.trim(), matric_no: matric.value.trim(), department_id: dept.value, level: level.value.trim() || null }).eq("id", r.id);
+        error ? msg(note, error.message.includes("duplicate") ? "That matric number is already used." : error.message) : (msg(note, "Saved.", true), setTimeout(viewStudents, 700));
+      } } }, "Save changes"), note));
+}
+
+// ================= ADMIN: reports & export =================
+const csvCell = v => { let t = String(v ?? ""); if (/^[=+@]/.test(t) || (/^-/.test(t) && isNaN(t))) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+const sheetId = u => (String(u).match(/\/d\/([A-Za-z0-9_-]+)/) || String(u).match(/^([A-Za-z0-9_-]{20,})$/) || [])[1] || "";
+
+async function viewReports() {
+  show(adminNav("reports"), loading());
+  const [{ data: depts, error: e1 }, { data: courses, error: e2 }] = await Promise.all([db.from("departments").select("id,name").order("name"), db.from("courses").select("id,code,title,department_id").order("code")]);
+  if (e1 || e2) return show(adminNav("reports"), errBox(e1 || e2));
+  const dept = h("select", {}, h("option", { value: "" }, "All departments"), opts(depts, d => d.name));
+  const course = h("select"), from = h("input", { type: "date" }), to = h("input", { type: "date" });
+  const fillC = () => course.replaceChildren(h("option", { value: "" }, "All courses"), ...opts(courses.filter(c => !dept.value || c.department_id === dept.value), c => c.code + " — " + c.title));
+  dept.addEventListener("change", fillC); fillC();
+  let saved = ""; try { saved = localStorage.getItem("sheetUrl") || ""; } catch {}
+  const sheet = h("input", { placeholder: "https://docs.google.com/spreadsheets/d/…", value: saved });
+  const out = h("div"), note = h("p", { class: "msg" });
+  let rows = [];
+  const filters = () => ({ p_department_id: dept.value || null, p_course_id: course.value || null, p_from: from.value || null, p_to: to.value || null });
+
+  const preview = h("button", {}, "Preview report");
+  preview.addEventListener("click", async () => {
+    preview.disabled = true; out.replaceChildren(loading()); note.textContent = "";
+    let data, error; try { data = await fetchSummary(filters(), courses, (i, n) => out.replaceChildren(loading("Loading course " + i + " of " + n + "…"))); } catch (e) { error = e; }
+    preview.disabled = false;
+    if (error) return out.replaceChildren(h("p", { class: "err" }, error.message));
+    rows = data; if (!rows.length) return out.replaceChildren(h("p", { class: "muted" }, "No students or sessions match these filters."));
+    const csvBtn = h("button", { class: "ghost", on: { click: () => {
+      const head = ["Matric No", "Name", "Department", "Course Code", "Course Title", "Sessions Held", "Sessions Attended", "Attendance %"];
+      const body = rows.map(r => [r.matric_no, r.full_name, r.department, r.course_code, r.course_title, r.sessions_held, r.sessions_attended, r.attendance_percentage].map(csvCell).join(","));
+      const a = h("a", { href: URL.createObjectURL(new Blob(["\ufeff" + [head.map(csvCell).join(","), ...body].join("\r\n")], { type: "text/csv" })), download: "attendance-" + new Date().toISOString().slice(0, 10) + ".csv" });
+      document.body.append(a); a.click(); a.remove();
+    } } }, "Download CSV");
+    const gBtn = h("button", { on: { click: async () => {
+      const id = sheetId(sheet.value);
+      if (sheet.value && !id) return msg(note, "That doesn't look like a Google Sheets link.");
+      try { localStorage.setItem("sheetUrl", sheet.value); } catch {}
+      gBtn.disabled = true; gBtn.textContent = "Exporting…"; note.textContent = "";
+      const { data: res, error: err } = await db.functions.invoke("export-to-sheets", { body: { ...Object.fromEntries(Object.entries(filters()).map(([k, v]) => [k.slice(2), v])), spreadsheet_id: id } });
+      gBtn.disabled = false; gBtn.textContent = "Export to Google Sheets";
+      if (err) { let m = err.message; try { m = (await err.context.json()).error || m; } catch {} return msg(note, m); }
+      note.className = "msg ok"; note.replaceChildren("Exported " + res.rows + " rows. ", h("a", { href: res.url, target: "_blank", rel: "noopener" }, "Open sheet"));
+    } } }, "Export to Google Sheets");
+    out.replaceChildren(h("p", { class: "muted" }, rows.length + " rows" + (rows.length > 200 ? " (preview shows the first 200; downloads and exports include all)" : "") + " · percentages count closed or expired sessions only"),
+      h("div", { class: "scroll" }, h("table", {}, h("tr", {}, ["Matric", "Name", "Course", "Held", "Attended", "%"].map(t => h("th", {}, t))),
+        rows.slice(0, 200).map(r => h("tr", {}, [r.matric_no, r.full_name, r.course_code, r.sessions_held, r.sessions_attended, r.attendance_percentage + "%"].map(t => h("td", {}, t)))))),
+      csvBtn, h("label", {}, "Google Sheet link (shared with the service account — see README)"), sheet, gBtn);
+  });
+  show(adminNav("reports"), h("h1", {}, "Reports"),
+    h("div", { class: "card" }, h("h2", {}, "Filters"), h("label", {}, "Department"), dept, h("label", {}, "Course"), course,
+      h("div", { class: "two" }, h("div", {}, h("label", {}, "From"), from), h("div", {}, h("label", {}, "To"), to)), preview),
+    h("div", { class: "card" }, out, note), signOutBtn());
+}
+
+db.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !user) route(); });
+route();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
