@@ -1,11 +1,12 @@
 {
   "name": "campus-attendance-pwa",
-  "version": "1.3.1",
+  "version": "1.5.0",
   "description": "Code-verified campus attendance PWA on Supabase",
   "private": true,
   "scripts": {
     "start": "npx serve .",
-    "test:ui": "node tests/ui/tests.js"
+    "test:ui": "node tests/ui/tests.js",
+    "vitals": "node tests/ui/vitals.js"
   },
   "runtimeDependencies": {
     "@supabase/supabase-js": "2.45.4 (loaded from cdn.jsdelivr.net in index.html, no install needed)"

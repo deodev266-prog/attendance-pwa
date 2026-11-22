@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     if (!add.ok) return json({ error: "Sheets: " + (addJ.error?.message ?? "cannot add tab. Is the sheet shared with " + sa.client_email + "?") }, 502);
     const gid = addJ.replies[0].addSheet.properties.sheetId;
 
-    const header = ["Matric No", "Name", "Department", "Course Code", "Course Title", "Sessions Held", "Sessions Attended", "Attendance %"];
+    const header = ["Registration No", "Name", "Department", "Course Code", "Course Title", "Sessions Held", "Sessions Attended", "Attendance %"];
     const rows = [header, ...data.map((r: any) => [r.matric_no, r.full_name, r.department, r.course_code, r.course_title, r.sessions_held, r.sessions_attended, Number(r.attendance_percentage)])];
     for (let i = 0; i < rows.length; i += 5000) { // chunked writes; RAW = no formula injection
       const put = await fetch(`${base}/values/${encodeURIComponent(`'${title}'!A${i + 1}`)}?valueInputOption=RAW`, {

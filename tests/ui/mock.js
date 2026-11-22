@@ -2,7 +2,8 @@
 (function () {
   const cfg = window.__cfg, calls = (window.__calls = []);
   const PHOTO = cfg.photo;
-  const depts = [{ id: 'd1', name: 'Agronomy' }, { id: 'd2', name: 'Nursing Science' }];
+  const F1 = { name: 'Faculty of Agriculture & Renewable Natural Resources', sort_order: 1 }, F2 = { name: 'Faculty of Natural and Applied Sciences', sort_order: 2 };
+  const depts = [{ id: 'd1', name: 'Agronomy', description: null, is_new: false, faculty_id: 'f1', faculties: F1 }, { id: 'd2', name: 'Plant Science', description: 'Botany', is_new: false, faculty_id: 'f2', faculties: F2 }, { id: 'd3', name: 'Cyber Security', description: null, is_new: true, faculty_id: 'f2', faculties: F2 }];
   const courses = [{ id: 'c1', code: 'AGR 101', title: 'Intro to Agronomy', department_id: 'd1' }, { id: 'c2', code: 'AGR 102', title: 'Soil Science', department_id: 'd1' }, { id: 'c3', code: 'NUR 201', title: 'Anatomy', department_id: 'd2' }];
   const admins = [{ id: 'u1', email: 'deodev266@gmail.com', full_name: null, is_primary: true, is_active: true, created_at: '2026-11-18' }, { id: 'a2', email: 'second@x.test', full_name: 'Second Admin', is_primary: false, is_active: true, created_at: '2026-11-19' }];
   const me = { id: 'u1', student_id: 'st1', auth_user_id: 'u1', matric_no: 'U2024/001', full_name: 'Tamu Student', department_id: 'd1', level: '200', registration_completed: true, photo_path: 'u1/avatar.jpg', terms_accepted_at: '2026-11-18T10:00:00Z', terms_version: '1.0' };
@@ -42,6 +43,7 @@
       const [f, tt] = q.range || [0, rows.length]; return { data: rows.slice(f, tt + 1), count: rows.length, error: null };
     }
     if (t === 'departments') return ok(depts);
+    if (t === 'faculties') return ok([{ id: 'f1', name: F1.name }, { id: 'f2', name: F2.name }]);
     if (t === 'courses') { const d = eq('department_id'); return ok(d ? courses.filter(c => c.department_id === d) : courses); }
     if (t === 'registrations') return ok(roster);
     if (t === 'student_attendance_summary') return ok([{ student_id: 'st1', course_id: 'c1', course_code: 'AGR 101', course_title: 'Intro to Agronomy', sessions_held: 10, sessions_attended: 8, attendance_percentage: 80 }]);
@@ -67,7 +69,7 @@
     chain('or', s => st.or = s); chain('eq', (k, v) => st.filters.push([k, v])); chain('range', (x, y) => st.range = [x, y]);
     chain('single', () => st.single = true); chain('maybeSingle', () => st.maybe = true);
     chain('insert', p => { st.op = 'insert'; st.payload = p; }); chain('update', p => { st.op = 'update'; st.payload = p; });
-    b.then = (res, rej) => Promise.resolve().then(() => handle(st)).then(res, rej);
+    b.then = (res, rej) => new Promise(r => setTimeout(r, cfg.delay || 0)).then(() => handle(st)).then(res, rej);
     return b;
   }
   const session = cfg.role === 'none' ? null : { user: { id: cfg.role === 'admin2' ? 'a2' : 'u1', email: cfg.role === 'admin2' ? 'second@x.test' : 'deodev266@gmail.com', user_metadata: { full_name: 'Tamu Student' } } };
