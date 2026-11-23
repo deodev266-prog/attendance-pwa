@@ -1,6 +1,6 @@
 {
   "name": "campus-attendance-pwa",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "description": "Code-verified campus attendance PWA on Supabase",
   "private": true,
   "scripts": {
@@ -17,11 +17,15 @@
     "postgres": "17",
     "auth_provider": "Google",
     "edge_functions": [
-      "export-to-sheets (Deno, deployed to the project)"
+      "export-to-sheets (Super Admin)",
+      "admin-users (Super Admin)"
     ],
     "required_secrets": [
       "GOOGLE_SERVICE_ACCOUNT_JSON",
       "GOOGLE_SHEET_ID (optional default)"
     ]
+  },
+  "devDependencies": {
+    "supabase": "^3.2.0"
   }
 }

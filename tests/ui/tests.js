@@ -17,6 +17,7 @@ async function open(browser, cfg, shot) {
     if (u.includes('cdn.jsdelivr.net')) return r.fulfill({ contentType: 'application/javascript', body: MOCK });
     return r.abort(); });
   await page.goto('http://app.test/');
+  await page.addStyleTag({ content: '.item{content-visibility:visible !important}' }); // test-only: off-screen rows are skipped by innerText otherwise
   return page;
 }
 fs.mkdirSync(path.join(__dirname, 'shots'), { recursive: true });
@@ -136,11 +137,11 @@ const txt = p => p.evaluate(() => document.body.innerText);
   log((await calls(p, c => c.n === 'reset_failed_attempts'))[0]?.args.p_student_id === 'r1', 'Unlock calls reset_failed_attempts for the right student');
   await snap(p, '3c-session-detail');
   // Setup -> administrators
-  await p.click('.tabs >> text=Setup'); await p.waitForSelector('text=Administrators (2)');
-  t = await txt(p); log(t.includes('PRIMARY') && t.includes('second@x.test') && t.includes('Deactivate') && t.includes('Add administrator'), 'primary admin sees admin list, PRIMARY badge, Deactivate, Add form');
+  await p.click('.tabs >> text=Setup'); await p.waitForSelector('text=Add existing account');
+  t = await txt(p); log(t.includes('SUPER ADMIN') && t.includes('PRIMARY') && t.includes('second@x.test') && t.includes('Deactivate') && t.includes('Make Super Admin') && t.includes('Create administrator account'), 'super admin sees roles, PRIMARY badge, promote/deactivate and create-account form', (fs.writeFileSync('/tmp/fail.txt', t), 'see /tmp/fail.txt'));
   log((await p.locator('text=Deactivate').count()) === 1, 'no Deactivate button on the primary admin itself');
-  await p.fill('input[type=email]', 'new@x.test'); await p.click('button:text-is("Add administrator")'); await called(p, 'add_administrator'); await p.waitForSelector('text=Administrators (2)');
-  log((await calls(p, c => c.n === 'add_administrator'))[0]?.args.p_email === 'new@x.test', 'Add administrator calls add_administrator RPC');
+  await p.fill('input[placeholder="Existing account email"]', 'new@x.test'); await p.click('button:text-is("Add existing account")'); await called(p, 'add_administrator'); await p.waitForSelector('text=Administrators (3)');
+  log((await calls(p, c => c.n === 'add_administrator'))[0]?.args.p_email === 'new@x.test', 'Add existing account calls add_administrator RPC');
   await snap(p, '3d-setup-admins');
   t = await txt(p); log(t.includes('Faculty of Agriculture') && t.includes('Plant Science (Botany)') && t.includes('Cyber Security · New'), 'Setup lists departments grouped by faculty');
   // Students tab: paging + search
@@ -151,12 +152,15 @@ const txt = p => p.evaluate(() => document.body.innerText);
   log(true, 'server-side search narrows to 1 student'); await snap(p, '3e-students');
   log(p.errors.length === 0, 'no JS errors in admin flow', p.errors.join(' | ')); await p.close();
 
-  // ===== 4. ADMIN (not primary) =====
+  // ===== 4. REGULAR ADMIN: sessions only =====
   p = await open(browser, { role: 'admin2' });
-  await p.waitForSelector('text=Attendance sessions'); await p.click('.tabs >> text=Setup'); await p.waitForSelector('text=Administrators (2)');
-  t = await txt(p);
-  log(t.includes('Only the primary administrator can add or remove') && !t.includes('Add administrator') && !t.includes('Deactivate'), 'non-primary admin cannot see add/deactivate controls');
-  await p.close();
+  await p.waitForSelector('text=Attendance sessions'); t = await txt(p);
+  const tabsTxt = await p.locator('.tabs button').allInnerTexts();
+  log(JSON.stringify(tabsTxt) === '["Sessions"]', 'regular admin sees only the Sessions tab (no Reports/Students/Setup)', JSON.stringify(tabsTxt));
+  log(t.includes('second@x.test · Admin') && !t.includes('Super Admin'), 'footer shows signed-in email and role (Admin)');
+  await p.waitForSelector('text=Ada Obi'); await p.click('text=Create session'); await p.waitForSelector('.code');
+  log((await calls(p, c => c.n === 'create_attendance_session')).length === 1, 'regular admin can create attendance sessions + codes');
+  log(p.errors.length === 0, 'no JS errors for regular admin', p.errors.join(' | ')); await p.close();
 
   // ===== 5. REPORTS: paging past 1000 rows, preview cap, CSV safety, Sheets =====
   p = await open(browser, { role: 'admin', sheets: 'fail' });
@@ -206,9 +210,83 @@ const txt = p => p.evaluate(() => document.body.innerText);
   log(swSrc.includes('endsWith("supabase.co")') && swSrc.includes('networkFirst') && swSrc.includes('cacheFirst'), 'service worker: Network First pages, Cache First assets, Supabase never cached');
   log(!/PushManager|pushManager|SyncManager|registration\.sync/.test(HTML + swSrc), 'no Push / Background Sync (limited on iOS)');
 
+  // ===== 7. EMAIL/PASSWORD AUTH + ROLES =====
+  p = await open(browser, { role: 'none', loginAs: 'student' });
+  await p.waitForSelector('text=Sign in'); 
+  const ui = await p.evaluate(() => ({ email: !!document.querySelector('input[type=email]'), pw: !!document.querySelector('input[type=password]'), btns: [...document.querySelectorAll('button')].map(b => b.textContent) }));
+  log(ui.email && ui.pw && ui.btns.includes('Sign In') && ui.btns.includes('Forgot password?') && ui.btns.includes('Sign in with Google') && ui.btns.includes('New student? Create an account'), 'login page: email + password, Sign In, Forgot password, Google, Create account', JSON.stringify(ui.btns));
+  await snap(p, '7a-login');
+  await p.click('button:text-is("Sign In")'); await p.waitForSelector('text=Enter your email and password'); log(true, 'empty login is rejected');
+  await p.fill('input[type=email]', 'stu@x.test'); await p.fill('input[type=password]', 'Secret123!'); await p.click('button:text-is("Sign In")');
+  await p.waitForSelector('text=My dashboard');
+  const pc = (await calls(p, c => c.n === 'password'))[0]; log(pc.args.email === 'stu@x.test' && pc.args.password === 'Secret123!', 'email/password sign-in calls Supabase signInWithPassword');
+  log(await p.locator('.tabs button').count() === 2 && (await txt(p)).includes('· Student'), 'student role -> student dashboard (not admin)');
+  await p.close();
+  for (const [who, expectTxt, tabs] of [['admin', 'Attendance sessions', 4], ['admin2', 'Attendance sessions', 1]]) {
+    p = await open(browser, { role: 'none', loginAs: who }); await p.waitForSelector('text=Sign in');
+    await p.fill('input[type=email]', 'x@x.test'); await p.fill('input[type=password]', 'pw123456'); await p.press('input[type=password]', 'Enter');
+    await p.waitForSelector('text=' + expectTxt); log(await p.locator('.tabs button').count() === tabs, who + ' signs in with password and lands on the admin dashboard with ' + tabs + ' tab(s)');
+    await p.close();
+  }
+  p = await open(browser, { role: 'none', loginAs: 'newstudent' }); await p.waitForSelector('text=Sign in');
+  await p.fill('input[type=email]', 'new@x.test'); await p.fill('input[type=password]', 'pw123456'); await p.click('button:text-is("Sign In")');
+  await p.waitForSelector('text=Student registration'); log(true, 'signed-in user with no student record goes to registration'); await p.close();
+  p = await open(browser, { role: 'none', loginAs: 'inactive' }); await p.waitForSelector('text=Sign in');
+  await p.fill('input[type=email]', 'off@x.test'); await p.fill('input[type=password]', 'pw123456'); await p.click('button:text-is("Sign In")');
+  await p.waitForSelector('text=Access disabled'); t = await txt(p); log(!t.includes('Attendance sessions'), 'deactivated admin is blocked (no admin screens)'); await p.close();
+  p = await open(browser, { role: 'none', loginFail: true }); await p.waitForSelector('text=Sign in');
+  await p.fill('input[type=email]', 'a@x.test'); await p.fill('input[type=password]', 'wrongwrong'); await p.click('button:text-is("Sign In")');
+  await p.waitForSelector('text=Incorrect email or password.'); log(true, 'wrong password shows a friendly error'); await p.close();
+
+  p = await open(browser, { role: 'none' }); await p.waitForSelector('text=Sign in');
+  await p.fill('input[type=email]', 'me@x.test'); await p.click('text=Forgot password?'); await p.waitForSelector('text=Reset password');
+  log((await p.inputValue('input[type=email]')) === 'me@x.test', 'Forgot password keeps the typed email');
+  await p.click('button:text-is("Send reset link")'); await p.waitForSelector('text=If an account exists');
+  const rc = (await calls(p, c => c.n === 'reset'))[0]; log(rc.args.e === 'me@x.test' && rc.args.o.redirectTo === 'http://app.test/', 'resetPasswordForEmail called with email + redirect back to the app', JSON.stringify(rc.args));
+  await snap(p, '7b-forgot'); await p.close();
+
+  p = await open(browser, { role: 'none', signUpSession: false }); await p.waitForSelector('text=Sign in'); await p.click('text=New student?'); await p.waitForSelector('text=Create account');
+  await p.fill('input[type=email]', 'new@x.test'); const pws = p.locator('input[type=password]');
+  await pws.nth(0).fill('short'); await pws.nth(1).fill('short'); await p.click('button:text-is("Create account")'); await p.waitForSelector('text=at least 8 characters');
+  await pws.nth(0).fill('longenough1'); await pws.nth(1).fill('different11'); await p.click('button:text-is("Create account")'); await p.waitForSelector('text=do not match');
+  await pws.nth(1).fill('longenough1'); await p.click('button:text-is("Create account")'); await p.waitForSelector('text=Check your email');
+  const sc = (await calls(p, c => c.n === 'signUp'))[0]; log(sc.args.email === 'new@x.test' && sc.args.password === 'longenough1' && sc.args.options.emailRedirectTo === 'http://app.test/', 'sign-up validates (8+ chars, match) then calls Supabase signUp');
+  await snap(p, '7c-signup'); await p.close();
+  p = await open(browser, { role: 'none', signUpSession: true }); await p.waitForSelector('text=Sign in'); await p.click('text=New student?'); await p.waitForSelector('text=Create account');
+  await p.fill('input[type=email]', 'new@x.test'); await p.locator('input[type=password]').nth(0).fill('longenough1'); await p.locator('input[type=password]').nth(1).fill('longenough1'); await p.click('button:text-is("Create account")');
+  await p.waitForSelector('text=Student registration'); log(true, 'sign-up (confirmation off) continues straight into student registration'); await p.close();
+  p = await open(browser, { role: 'none', dupEmail: true }); await p.waitForSelector('text=Sign in'); await p.click('text=New student?'); await p.waitForSelector('text=Create account');
+  await p.fill('input[type=email]', 'new@x.test'); await p.locator('input[type=password]').nth(0).fill('longenough1'); await p.locator('input[type=password]').nth(1).fill('longenough1'); await p.click('button:text-is("Create account")');
+  await p.waitForSelector('text=already exists'); log(true, 'duplicate email is explained'); await p.close();
+
+  // password recovery link (#type=recovery) and the PASSWORD_RECOVERY event
+  p = await open(browser, { role: 'student' }); await p.evaluate(() => { location.hash = 'access_token=x&type=recovery'; }); await p.reload();
+  await p.waitForSelector('text=Choose a new password'); t = await txt(p); log(!t.includes('My dashboard'), 'recovery link opens the new-password form (not the dashboard)');
+  const np = p.locator('input[type=password]'); await np.nth(0).fill('short'); await np.nth(1).fill('short'); await p.click('button:text-is("Update password")'); await p.waitForSelector('text=at least 8 characters');
+  await np.nth(0).fill('NewPassw0rd!'); await np.nth(1).fill('NewPassw0rd!'); await p.click('button:text-is("Update password")'); await called(p, 'updateUser');
+  log((await calls(p, c => c.n === 'updateUser'))[0].args.password === 'NewPassw0rd!', 'new password is sent via Supabase updateUser'); await p.waitForSelector('text=My dashboard'); log(true, 'after updating the password the user is signed in to their dashboard');
+  await p.close();
+  p = await open(browser, { role: 'none' }); await p.waitForSelector('text=Sign in'); await p.evaluate(() => window.__authCb('PASSWORD_RECOVERY')); await p.waitForSelector('text=Choose a new password'); log(true, 'PASSWORD_RECOVERY auth event shows the new-password form'); await p.close();
+  p = await open(browser, { role: 'none', updateFail: true }); await p.evaluate(() => { location.hash = 'type=recovery'; }); await p.reload(); await p.waitForSelector('text=Choose a new password');
+  await p.locator('input[type=password]').nth(0).fill('NewPassw0rd!'); await p.locator('input[type=password]').nth(1).fill('NewPassw0rd!'); await p.click('button:text-is("Update password")');
+  await p.waitForSelector('text=expired or was already used'); log(true, 'expired reset link shows a clear message'); await p.close();
+
+  // super admin: create account via server function, promote, deactivate
+  p = await open(browser, { role: 'admin' }); await p.waitForSelector('text=Attendance sessions'); await p.click('.tabs >> text=Setup'); await p.waitForSelector('text=Administrators (3)');
+  await p.fill('input[placeholder="Email"]', 'newadmin@x.test'); await p.fill('input[placeholder="Full name"]', 'New Admin'); await p.fill('input[placeholder^="Temporary password"]', 'TempPass123');
+  await p.click('button:text-is("Create administrator account")'); await called(p, 'admin-users');
+  const cf = (await calls(p, c => c.t === 'fn'))[0]; log(cf.body.action === 'create' && cf.body.email === 'newadmin@x.test' && cf.body.role === 'admin' && cf.body.password === 'TempPass123', 'Create administrator account calls the server function (no service key in the browser)');
+  log(!/service_role|SERVICE_ROLE/.test(HTML), 'no service-role key or name appears anywhere in the frontend');
+  await p.click('button:text-is("Make Super Admin") >> nth=0'); await called(p, 'set_administrator_role');
+  const ro = (await calls(p, c => c.n === 'set_administrator_role'))[0]; log(ro.args.p_admin_id === 'a2' && ro.args.p_role === 'super_admin', 'promote calls set_administrator_role');
+  await p.close();
+  p = await open(browser, { role: 'admin', createFail: true }); await p.waitForSelector('text=Attendance sessions'); await p.click('.tabs >> text=Setup'); await p.waitForSelector('text=Administrators (3)');
+  await p.fill('input[placeholder="Email"]', 'dup@x.test'); await p.fill('input[placeholder^="Temporary password"]', 'TempPass123'); await p.click('button:text-is("Create administrator account")');
+  await p.waitForSelector('text=already exists'); log(true, 'server error (e.g. duplicate email) is shown to the super admin'); await p.close();
+
   // ===== 6. signed out =====
   p = await open(browser, { role: 'none' });
-  await p.waitForSelector('text=Sign in with Google'); t = await txt(p);
+  await p.waitForSelector('text=Sign in'); t = await txt(p);
   log(t.includes('FEDERAL UNIVERSITY') && t.includes('WhatsApp 09152649961') && t.includes('Email'), 'sign-in page shows school name + support contacts');
   await p.click('button:has-text("Sign in with Google")'); await p.waitForTimeout(200); log((await calls(p, c => c.n === 'oauth'))[0]?.args.provider === 'google', 'Google sign-in button triggers OAuth with provider=google');
   await snap(p, '6-signin'); await p.close();

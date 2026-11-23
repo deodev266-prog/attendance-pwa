@@ -152,31 +152,106 @@ async function toPhoto(file, max = 360) { // WebP where the browser can encode i
   if (!blob) throw new Error("Image error"); return { blob, lqip };
 }
 const msg = (el, text, ok) => { el.textContent = text; el.className = "msg " + (ok ? "ok" : "err"); };
-const signOutBtn = () => h("button", { class: "ghost", on: { click: async () => { await db.auth.signOut(); location.reload(); } } }, "Sign out");
+const roleLabel = () => adminRole === "super_admin" ? "Super Admin" : adminRole === "admin" ? "Admin" : "Student";
+const signOutBtn = () => h("div", {}, h("p", { class: "muted", style: "text-align:center;margin:14px 0 0;font-size:.85rem" }, (user?.email || "") + " · " + roleLabel()),
+  h("button", { class: "ghost", on: { click: async () => { await db.auth.signOut(); location.reload(); } } }, "Sign out"));
+const fnError = async err => { let m = err.message; try { m = (await err.context.json()).error || m; } catch {} return m; };
+const authError = e => /invalid login/i.test(e.message) ? "Incorrect email or password." : /not confirmed/i.test(e.message) ? "Please confirm your email first (check your inbox), then sign in." : /rate limit|too many|security purposes/i.test(e.message) ? "Too many attempts. Wait a few minutes and try again." : e.message;
 
-async function route() {
+let routing = false, adminRole = null, recovering = /type=recovery/.test(location.hash);
+async function route() { if (routing) return; routing = true; try { await doRoute(); } finally { routing = false; } }
+async function doRoute() {
+  if (recovering) return viewNewPassword();
   const { data: { session } } = await db.auth.getSession();
   if (!session) return viewSignIn();
   user = session.user;
-  const { data: adm } = await db.from("administrators").select("id").eq("id", user.id).maybeSingle();
-  if (adm) return viewSessions();
+  // The role comes from the database (administrators.role), never from anything the browser can edit.
+  const { data: adm } = await db.from("administrators").select("id,role,is_active").eq("id", user.id).maybeSingle();
+  if (adm) { if (!adm.is_active) return viewBlocked(); adminRole = adm.role; return viewSessions(); }
+  adminRole = null;
   const { data: st } = await db.from("students").select("*").eq("auth_user_id", user.id).maybeSingle();
   student = st;
   if (!st) return viewProfile();
   if (!st.registration_completed) return viewCourses();
   return viewDashboard();
 }
+const denied = () => show(adminNav("sessions"), h("div", { class: "card" }, h("p", { class: "err" }, "This area is for Super Admins only.")), signOutBtn());
+function viewBlocked() { show(h("h1", {}, "Access disabled"), h("div", { class: "card" }, h("p", { class: "err" }, "Your administrator access has been deactivated. Contact the Super Admin."), signOutBtn())); }
 
-function viewSignIn() {
-  const note = h("p", { class: "msg" });
+const backLink = () => h("button", { class: "link", on: { click: () => viewSignIn() } }, "← Back to sign in");
+function viewSignIn(prefill) {
+  const email = h("input", { type: "email", autocomplete: "username", inputMode: "email", placeholder: "Email", value: prefill || "" });
+  const pw = h("input", { type: "password", autocomplete: "current-password", placeholder: "Password" });
+  const note = h("p", { class: "msg" }), btn = h("button", {}, "Sign In");
+  const submit = async () => {
+    if (!email.value.trim() || !pw.value) return msg(note, "Enter your email and password.");
+    btn.disabled = true; btn.textContent = "Signing in…"; note.textContent = "";
+    const { error } = await db.auth.signInWithPassword({ email: email.value.trim(), password: pw.value });
+    btn.disabled = false; btn.textContent = "Sign In";
+    if (error) return msg(note, authError(error));
+    route();
+  };
+  btn.addEventListener("click", submit); pw.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   show(h("h1", {}, "Campus Attendance"),
-    h("div", { class: "card" },
-      h("h2", {}, "Welcome"),
-      h("p", { class: "muted" }, "Sign in with Google. Students register once; administrators are approved separately."),
-      h("button", { on: { click: async () => {
+    h("div", { class: "card" }, h("h2", {}, "Sign in"),
+      h("label", {}, "Email"), email, h("label", {}, "Password"), pw, btn, note,
+      h("button", { class: "link", on: { click: () => viewForgot(email.value) } }, "Forgot password?"),
+      h("p", { class: "muted", style: "text-align:center;margin:8px 0 0" }, "or"),
+      h("button", { class: "ghost", on: { click: async () => {
         const { error } = await db.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
         if (error) msg(note, error.message);
-      } } }, "Sign in with Google"), note));
+      } } }, "Sign in with Google"),
+      h("button", { class: "link", on: { click: viewSignUp } }, "New student? Create an account")));
+}
+function viewSignUp() {
+  const email = h("input", { type: "email", autocomplete: "email", inputMode: "email", placeholder: "Email" });
+  const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "At least 8 characters" });
+  const pw2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Repeat password" });
+  const note = h("p", { class: "msg" }), btn = h("button", {}, "Create account");
+  btn.addEventListener("click", async () => {
+    if (!/^\S+@\S+\.\S+$/.test(email.value.trim())) return msg(note, "Enter a valid email address.");
+    if (pw.value.length < 8) return msg(note, "Password must be at least 8 characters.");
+    if (pw.value !== pw2.value) return msg(note, "The two passwords do not match.");
+    btn.disabled = true; btn.textContent = "Creating…";
+    const { data, error } = await db.auth.signUp({ email: email.value.trim(), password: pw.value, options: { emailRedirectTo: location.origin + location.pathname } });
+    btn.disabled = false; btn.textContent = "Create account";
+    if (error) return msg(note, authError(error));
+    if (data?.user && data.user.identities && data.user.identities.length === 0) return msg(note, "An account with this email already exists. Sign in instead, or use Forgot password.");
+    if (data?.session) return route(); // email confirmation off: go straight to registration
+    msg(note, "Account created. Check your email to confirm it, then sign in to finish registration.", true);
+  });
+  show(h("h1", {}, "Create account"), h("div", { class: "card" }, h("p", { class: "muted" }, "For students. After this you will add your details, photo and courses."),
+    h("label", {}, "Email"), email, h("label", {}, "Password"), pw, h("label", {}, "Repeat password"), pw2, btn, note, backLink()));
+}
+function viewForgot(prefill) {
+  const email = h("input", { type: "email", autocomplete: "username", inputMode: "email", placeholder: "Email", value: prefill || "" });
+  const note = h("p", { class: "msg" }), btn = h("button", {}, "Send reset link");
+  btn.addEventListener("click", async () => {
+    if (!/^\S+@\S+\.\S+$/.test(email.value.trim())) return msg(note, "Enter the email you registered with.");
+    btn.disabled = true; btn.textContent = "Sending…";
+    const { error } = await db.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: location.origin + location.pathname });
+    btn.disabled = false; btn.textContent = "Send reset link";
+    if (error && /rate limit|too many|security purposes/i.test(error.message)) return msg(note, authError(error));
+    msg(note, "If an account exists for that email, a reset link has been sent. Check your inbox (and spam).", true); // same message either way: no account probing
+  });
+  show(h("h1", {}, "Reset password"), h("div", { class: "card" }, h("p", { class: "muted" }, "Enter your email and we will send you a link to choose a new password."), h("label", {}, "Email"), email, btn, note, backLink()));
+}
+function viewNewPassword() {
+  const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "At least 8 characters" });
+  const pw2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Repeat password" });
+  const note = h("p", { class: "msg" }), btn = h("button", {}, "Update password");
+  btn.addEventListener("click", async () => {
+    if (pw.value.length < 8) return msg(note, "Password must be at least 8 characters.");
+    if (pw.value !== pw2.value) return msg(note, "The two passwords do not match.");
+    btn.disabled = true; btn.textContent = "Updating…";
+    const { error } = await db.auth.updateUser({ password: pw.value });
+    btn.disabled = false; btn.textContent = "Update password";
+    if (error) return msg(note, /session/i.test(error.message) ? "This reset link has expired or was already used. Request a new one." : error.message);
+    recovering = false; try { history.replaceState(null, "", location.pathname + location.search); } catch {}
+    msg(note, "Password updated. Signing you in…", true); setTimeout(route, 900);
+  });
+  show(h("h1", {}, "Choose a new password"), h("div", { class: "card" }, h("label", {}, "New password"), pw, h("label", {}, "Repeat password"), pw2, btn, note,
+    h("button", { class: "link", on: { click: () => { recovering = false; viewForgot(); } } }, "Request a new link")));
 }
 
 const LEVELS = ["100", "200", "300", "400"];
@@ -284,11 +359,12 @@ async function viewDashboard() {
 }
 
 async function viewAdmin() {
+  if (adminRole !== "super_admin") return denied();
   const [{ data: depts }, { data: courses }, { count }, { data: admins }, { data: faculties }] = await Promise.all([
     db.from("departments").select(DEPT_SEL).order("name"),
     db.from("courses").select("id,code,title,department_id").order("code"),
     db.from("students").select("id", { count: "exact", head: true }),
-    db.from("administrators").select("id,email,full_name,is_primary,is_active,created_at").order("created_at"),
+    db.from("administrators").select("id,email,full_name,role,is_primary,is_active,created_at").order("created_at"),
     db.from("faculties").select("id,name").order("sort_order")]);
   const dn = h("input", { placeholder: "Department name" }), dnote = h("p", { class: "msg" });
   const cc = h("input", { placeholder: "Course code, e.g. NSC 201" }), ct = h("input", { placeholder: "Course title" });
@@ -319,7 +395,7 @@ async function viewAdmin() {
 // ================= shared helpers =================
 const when = x => x ? new Date(x).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
 const tabs = (items, cur) => h("div", { class: "tabs" }, items.map(([k, l, f]) => h("button", { class: k === cur ? "on" : "", on: { click: f } }, l)));
-const adminNav = cur => tabs([["sessions", "Sessions", viewSessions], ["reports", "Reports", viewReports], ["students", "Students", viewStudents], ["setup", "Setup", viewAdmin]], cur);
+const adminNav = cur => tabs(adminRole === "super_admin" ? [["sessions", "Sessions", viewSessions], ["reports", "Reports", viewReports], ["students", "Students", viewStudents], ["setup", "Setup", viewAdmin]] : [["sessions", "Sessions", viewSessions]], cur);
 const studentNav = cur => tabs([["dash", "Dashboard", viewDashboard], ["mark", "Mark attendance", viewMark]], cur);
 const opts = (rows, label) => rows.map(r => h("option", { value: r.id }, label(r)));
 const skelRow = () => h("div", { class: "skel-row" }, h("i", { class: "sk sk-av" }), h("div", { class: "sk-lines" }, h("i", { class: "sk sk-l1" }), h("i", { class: "sk sk-l2" })));
@@ -482,20 +558,37 @@ function viewCode(s, url) {
 
 // ================= ADMIN: administrators (primary admin is permanent; only the primary manages others) =================
 function adminsCard(admins) {
-  const me = admins.find(a => a.id === user.id), isPrimary = !!me?.is_primary;
-  const email = h("input", { type: "email", placeholder: "Email of a person who has signed in once" }), nm = h("input", { placeholder: "Name (optional)" }), note = h("p", { class: "msg" });
+  const note = h("p", { class: "msg" });
   const run = async (label, fn) => { msg(note, label + "…", true); const { error } = await fn(); error ? msg(note, error.message) : viewAdmin(); };
+  const cEmail = h("input", { type: "email", placeholder: "Email" }), cName = h("input", { placeholder: "Full name" }), cPw = h("input", { type: "password", autocomplete: "new-password", placeholder: "Temporary password (8+ characters)" });
+  const cRole = h("select", {}, h("option", { value: "admin" }, "Admin (sessions only)"), h("option", { value: "super_admin" }, "Super Admin (full control)"));
+  const cBtn = h("button", {}, "Create administrator account");
+  cBtn.addEventListener("click", async () => {
+    if (!/^\S+@\S+\.\S+$/.test(cEmail.value.trim()) || cPw.value.length < 8) return msg(note, "Enter a valid email and a password of at least 8 characters.");
+    cBtn.disabled = true; cBtn.textContent = "Creating…"; note.textContent = "";
+    const { error } = await db.functions.invoke("admin-users", { body: { action: "create", email: cEmail.value.trim(), password: cPw.value, full_name: cName.value.trim(), role: cRole.value } });
+    cBtn.disabled = false; cBtn.textContent = "Create administrator account";
+    if (error) return msg(note, await fnError(error));
+    viewAdmin();
+  });
+  const eEmail = h("input", { type: "email", placeholder: "Existing account email" });
+  const eRole = h("select", {}, h("option", { value: "admin" }, "Admin"), h("option", { value: "super_admin" }, "Super Admin"));
   return h("div", { class: "card" }, h("h2", {}, "Administrators (" + admins.length + ")"),
-    admins.map(a => h("div", { class: "item" }, h("div", { class: "row" },
-      h("div", {}, h("strong", {}, a.full_name || a.email), a.is_primary ? h("span", { class: "badge" }, "PRIMARY") : "", !a.is_active ? h("span", { class: "badge off" }, "INACTIVE") : "", h("div", { class: "muted" }, a.email)),
-      isPrimary && !a.is_primary ? h("button", { class: "sm " + (a.is_active ? "bad" : ""), on: { click: () => (!a.is_active || confirm("Remove admin access for " + a.email + "?")) && run("Saving", () => db.rpc("set_administrator_active", { p_admin_id: a.id, p_active: !a.is_active })) } }, a.is_active ? "Deactivate" : "Reactivate") : ""))),
-    isPrimary ? h("div", {}, h("label", {}, "Add administrator"), email, h("div", { style: "height:8px" }), nm,
-      h("button", { on: { click: () => email.value.trim() ? run("Adding", () => db.rpc("add_administrator", { p_email: email.value.trim(), p_full_name: nm.value.trim() || null })) : msg(note, "Enter an email.") } }, "Add administrator"))
-    : h("p", { class: "muted" }, "Only the primary administrator can add or remove administrators. The primary administrator can never be changed."), note);
+    admins.map(a => { const mine = a.id === user.id, locked = a.is_primary || mine;
+      return h("div", { class: "item" },
+        h("div", {}, h("strong", {}, a.full_name || a.email), h("span", { class: "badge" }, a.role === "super_admin" ? "SUPER ADMIN" : "ADMIN"), a.is_primary ? h("span", { class: "badge" }, "PRIMARY") : "", !a.is_active ? h("span", { class: "badge off" }, "INACTIVE") : "", h("div", { class: "muted" }, a.email)),
+        locked ? "" : h("div", { class: "row", style: "margin-top:6px;gap:8px" },
+          h("button", { class: "ghost sm", on: { click: () => confirm("Change role for " + a.email + "?") && run("Saving", () => db.rpc("set_administrator_role", { p_admin_id: a.id, p_role: a.role === "super_admin" ? "admin" : "super_admin" })) } }, a.role === "super_admin" ? "Make Admin" : "Make Super Admin"),
+          h("button", { class: "sm " + (a.is_active ? "bad" : ""), on: { click: () => (!a.is_active || confirm("Remove admin access for " + a.email + "?")) && run("Saving", () => db.rpc("set_administrator_active", { p_admin_id: a.id, p_active: !a.is_active })) } }, a.is_active ? "Deactivate" : "Reactivate"))); }),
+    h("label", {}, "Create administrator account"), cEmail, h("div", { style: "height:8px" }), cName, h("div", { style: "height:8px" }), cPw, h("div", { style: "height:8px" }), cRole, cBtn,
+    h("label", {}, "Or promote an existing account"), eEmail, h("div", { style: "height:8px" }), eRole,
+    h("button", { class: "ghost", on: { click: () => eEmail.value.trim() ? run("Adding", () => db.rpc("add_administrator", { p_email: eEmail.value.trim(), p_full_name: null, p_role: eRole.value })) : msg(note, "Enter an email.") } }, "Add existing account"),
+    h("p", { class: "muted", style: "margin-top:10px" }, "The primary Super Admin can never be changed. You cannot change your own role."), note);
 }
 
 // ================= ADMIN: students =================
 async function viewStudents() {
+  if (adminRole !== "super_admin") return denied();
   show(adminNav("students"), loading());
   const { data: depts } = await db.from("departments").select(DEPT_SEL).order("name");
   const dn = Object.fromEntries((depts || []).map(d => [d.id, d.name]));
@@ -540,6 +633,7 @@ const csvCell = v => { let t = String(v ?? ""); if (/^[=+@]/.test(t) || (/^-/.te
 const sheetId = u => (String(u).match(/\/d\/([A-Za-z0-9_-]+)/) || String(u).match(/^([A-Za-z0-9_-]{20,})$/) || [])[1] || "";
 
 async function viewReports() {
+  if (adminRole !== "super_admin") return denied();
   show(adminNav("reports"), loading());
   const [{ data: depts, error: e1 }, { data: courses, error: e2 }] = await Promise.all([db.from("departments").select(DEPT_SEL).order("name"), db.from("courses").select("id,code,title,department_id").order("code")]);
   if (e1 || e2) return show(adminNav("reports"), errBox(e1 || e2));
@@ -587,7 +681,10 @@ async function viewReports() {
     h("div", { class: "card" }, out, note), signOutBtn());
 }
 
-db.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" && !user) route(); });
+db.auth.onAuthStateChange((ev) => {
+  if (ev === "PASSWORD_RECOVERY") { recovering = true; viewNewPassword(); }
+  else if (ev === "SIGNED_IN" && !user && !recovering) route();
+});
 route();
 const offlineBar = h("div", { class: "offline", role: "status" }, "You're offline. Attendance can't be verified until you reconnect.");
 document.body.prepend(offlineBar);

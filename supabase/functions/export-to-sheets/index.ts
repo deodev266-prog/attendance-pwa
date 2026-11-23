@@ -72,8 +72,8 @@ Deno.serve(async (req) => {
     const { data: { user } } = await sb.auth.getUser(auth.replace(/^Bearer /i, ""));
     if (!user) return json({ error: "Not signed in" }, 401);
 
-    const { data: adm } = await sb.from("administrators").select("id").eq("id", user.id).eq("is_active", true).maybeSingle();
-    if (!adm) return json({ error: "Administrators only" }, 403);
+    const { data: isSuper } = await sb.rpc("is_super_admin");
+    if (isSuper !== true) return json({ error: "Super Admins only" }, 403);
 
     const b = await req.json().catch(() => ({}));
     const data = await fetchRows(sb, b);
@@ -107,6 +107,6 @@ Deno.serve(async (req) => {
     return json({ ok: true, rows: data.length, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit#gid=${gid}` });
   } catch (e) {
     const m = (e as { message?: string }).message ?? String(e);
-    return json({ error: m }, m.includes("Administrators only") ? 403 : 500);
+    return json({ error: m }, (m.includes("Administrators only") || m.includes("Super Admins only")) ? 403 : 500);
   }
 });

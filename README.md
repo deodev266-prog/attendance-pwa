@@ -40,6 +40,64 @@ Percentages count only **closed or expired** sessions. Expired = past its durati
 - **UI** follows your OTP mock: gradient background, white card, dark-blue digit boxes, on-screen keypad. Same colours for admin.
 - **Support contact** (email + WhatsApp) appears at the bottom of every screen.
 
+## v2.0: sign-in methods and administrator roles
+### Sign-in
+The login page has **email + password** (Sign In), **Forgot password?**, **Sign in with Google** and **New student? Create an
+account**. A student creates an account (email + password, or Google), then completes the usual registration (details, photo,
+terms, courses). After signing in the app reads the user's role from the database and routes them: Super Admin / Admin to the
+admin dashboard, students to the student dashboard, new accounts to registration. A deactivated admin sees "Access disabled".
+Reset links bring the user back to the app on a "Choose a new password" screen.
+
+### Roles (enforced by the database - hiding a tab in the browser is only cosmetic)
+| | Super Admin | Admin | Student |
+|---|---|---|---|
+| Create / promote / deactivate administrators | yes | no | no |
+| Create sessions, generate / change codes, set time, close, unlock | yes | yes | no |
+| View session attendance records (with photos) | yes | yes | own percentages only |
+| Reports, percentages, CSV and Google Sheets export | yes | no | no |
+| View / edit students, departments, courses (Setup, Students tabs) | yes | no (can only read) | no |
+| Audit log | yes | no | no |
+Where this lives: `administrators.role` (`super_admin` | `admin`), `is_super_admin()`, `is_admin()`, row-level-security policies,
+and the functions `add_administrator`, `set_administrator_role`, `set_administrator_active`, `admin_attendance_summary`.
+Nobody can edit `administrators` from the browser: insert/update/delete privileges were revoked and there are no write policies,
+so a user cannot promote themselves (tested). The primary Super Admin (the first admin) can never be demoted, deactivated or
+deleted; you cannot change your own role or access; the primary guarantees there is always at least one Super Admin.
+**The first Super Admin** is assigned by the migration (`20261125...sql`) to the existing primary admin. On a new project run the
+`insert ... 'super_admin', true` statement shown in that file.
+
+### Supabase settings you must check (Authentication in the dashboard)
+1. **Providers > Email**: enabled. Set the minimum password length to 8 or more (and enable leaked-password protection if your plan has it).
+2. **URL Configuration**: Site URL = your hosted address; add it (and `http://localhost:3000` if you test locally) under Redirect URLs.
+   Without this, password-reset and confirmation links will not return to the app.
+3. **Email confirmation**: if "Confirm email" is ON (recommended) new students must click the email link before signing in.
+4. **SMTP - important**: Supabase's built-in email sender is for testing only. It is heavily rate-limited and may only deliver to
+   your own team members. For real students you need a custom SMTP provider (Authentication > Emails > SMTP Settings), otherwise
+   confirmation and password-reset emails will not arrive.
+5. **Google** provider stays as configured; nothing changes for Google sign-in.
+6. Customise the email templates if you want the school name in them.
+
+### Server functions (Edge Functions)
+- `admin-users` (new): lets a Super Admin create an administrator account (email, temporary password, role). It checks the caller is a
+  Super Admin, then creates the user with Supabase's admin API. It uses the `SUPABASE_SERVICE_ROLE_KEY` that Supabase automatically
+  provides **inside the function only**; it is never in `index.html`. Deploy: `supabase functions deploy admin-users --no-verify-jwt`.
+- `export-to-sheets` now requires a Super Admin. Redeploy it too.
+Without `admin-users`, use **Or promote an existing account** (the person signs up first, then you promote them).
+Give new admins a temporary password and ask them to use *Forgot password* to choose their own.
+
+### Security notes
+- Never put the service-role key in the frontend. This project's frontend contains only the project URL and the publishable key.
+- Anyone on the internet can create a student account (that is how registration works); it gives no admin power.
+- Supabase rate-limits sign-in and reset attempts; the app shows a friendly message when that happens.
+
+## Course catalogue (loaded)
+124 courses are loaded in `courses` with a `level` (100/200) column. Students see **all** courses of their department
+(the registration query filters by department only, never by level). Course titles are currently the course code because
+no titles were supplied. 30 courses from the supplied list are **not** loaded because they have no matching department yet
+(Statistics, General Studies, Finance, Marketing, Political Science, Sociology, Islamic Studies, General Agriculture,
+Agriculture, Agric Engineering, Food/Consumer Science, Fisheries/Agriculture, Farm Practical, Data Science, Education,
+Soil/Information Management, Health Management): see the comment in the migration file. Add courses with SQL against
+`departments`/`courses` (joined by department name) or from Setup.
+
 ## v1.5: faculties, skeleton screens, PWA performance
 **Faculties and departments (already loaded in your project).** 3 faculties, 28 departments, grouped under their faculty
 in every dropdown (registration, sessions, reports, setup). Departments with a bracketed name show it
@@ -137,7 +195,7 @@ Never put the service_role key or the Google JSON in `index.html`.
 
 ## Automated UI tests
 `tests/ui/` runs the real `index.html` in headless Chromium against an in-memory fake of the Supabase client
-(no network). 77 checks cover student registration (photo resize/upload, terms), the OTP-style code screen
+(no network). 103 checks cover student registration (photo resize/upload, terms), the OTP-style code screen
 (masking, wrong/right code, attempts), admin sessions (hold-to-show code, custom code, time, close, unlock),
 primary vs non-primary admin controls, students paging/search, report paging past 1,000 rows, CSV safety and the
 Sheets call. Run: `npm i -D playwright && npx playwright install chromium && node tests/ui/tests.js`.
